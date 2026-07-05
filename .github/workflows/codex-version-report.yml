@@ -1,0 +1,59 @@
+name: Report Codex CLI version
+
+on:
+  schedule:
+    - cron: "30 6,11,16,21 * * *"
+      timezone: "Asia/Singapore"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: codex-version-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Report Codex CLI version
+    runs-on: ubuntu-latest
+    env:
+      ISSUE_NUMBER: "1"
+      TZ: "Asia/Singapore"
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Codex CLI
+        run: npm install -g @openai/codex@latest
+
+      - name: Capture Codex CLI version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          codex_version="$(codex --version 2>&1 || true)"
+          npm_latest_version="$(npm view @openai/codex version 2>&1 || true)"
+          now_sgt="$(date '+%Y-%m-%d %H:%M:%S %Z')"
+          now_utc="$(TZ=UTC date '+%Y-%m-%d %H:%M:%S %Z')"
+
+          {
+            echo "## Codex CLI version report"
+            echo
+            echo "- Singapore time: ${now_sgt}"
+            echo "- UTC time: ${now_utc}"
+            echo "- Installed command: \`codex --version\`"
+            echo "- Installed Codex CLI version: \`${codex_version}\`"
+            echo "- npm latest \`@openai/codex\` version: \`${npm_latest_version}\`"
+            echo "- Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          } > report.md
+
+          cat report.md
+
+      - name: Comment on report issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment "${ISSUE_NUMBER}" --body-file report.md
